@@ -19,7 +19,7 @@
 		"baseUrl": "./packages",
 		"paths": {
 			//因为设置了baseUrl所以./从baseUrl开始算
-			"hostConfig": ["./react-reconciler/src/hostConfig.ts"]
+			"hostConfig": ["./react-dom/src/hostConfig.ts"]
 		}
 	}
 }

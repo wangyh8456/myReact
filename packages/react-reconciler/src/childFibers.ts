@@ -27,6 +27,7 @@ function childReconciler(shouldTrackEffects: boolean) {
 	}
 
 	function placeSingleChild(fiber: FiberNode) {
+		console.warn('placeSingleChild:', fiber, shouldTrackEffects);
 		//应该追踪副作用且fiber.alternate即current为空时（首屏渲染时）搭上Placement标记
 		if (shouldTrackEffects && fiber.alternate === null) {
 			fiber.flags |= Placement;
@@ -72,6 +73,6 @@ function childReconciler(shouldTrackEffects: boolean) {
 }
 
 //update时
-export const reconcileChildFibers = childReconciler(false);
+export const reconcileChildFibers = childReconciler(true);
 //mount时
-export const mountChildFibers = childReconciler(true);
+export const mountChildFibers = childReconciler(false);
