@@ -37,7 +37,7 @@ function updateHostRoot(wip: FiberNode) {
 	const pending = updateQueue.shared.pending;
 	updateQueue.shared.pending = null;
 	const { memoizedState } = processUpdateQueue(baseState, pending);
-	//<App/>为此处的pending，ReactElementType类型，不是function，因此memoizedState就是<App/>
+	//<App/>为此处的pending的Update包含的参数，ReactElementType类型，不是function，因此memoizedState就是<App/>
 	wip.memoizedState = memoizedState;
 
 	const nextChildren = wip.memoizedState;

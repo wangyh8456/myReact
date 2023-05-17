@@ -21,7 +21,9 @@ export function getPackageJson(pkgname) {
 	return JSON.parse(str);
 }
 
+//参数这个对象默认值为{}
 export function getBaseRollupPlugins({
+	//alias默认值为{ __DEV__: true, preventAssignment: true }
 	alias = { __DEV__: true, preventAssignment: true },
 	typescript = {}
 } = {}) {
