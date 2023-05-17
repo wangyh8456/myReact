@@ -13,7 +13,7 @@ export default [
 		input: `${pkgpath}/${module}`,
 		output: {
 			file: `${distpath}/index.js`,
-			name: 'index.js',
+			name: 'React',
 			//umd兼容commonjs和esmodule
 			format: 'umd'
 		},
@@ -37,12 +37,12 @@ export default [
 		output: [
 			{
 				file: `${distpath}/jsx-runtime.js`,
-				name: 'jsx-runtime.js',
+				name: 'jsx-runtime',
 				format: 'umd'
 			},
 			{
 				file: `${distpath}/jsx-dev-runtime.js`,
-				name: 'jsx-dev-runtime.js',
+				name: 'jsx-dev-runtime',
 				format: 'umd'
 			}
 		],

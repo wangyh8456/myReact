@@ -2,7 +2,8 @@
 	"env": {
 		"browser": true,
 		"es2021": true,
-		"node": true
+		"node": true,
+		"jest": true
 	},
 	//前两条表示继承了eslint和plugin:@typescript-eslint/recommended的规则(各种规则的打开或关闭的配置)
 	"extends": [

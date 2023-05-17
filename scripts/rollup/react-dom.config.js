@@ -15,14 +15,15 @@ export default [
 		output: [
 			{
 				file: `${distpath}/index.js`,
-				name: 'index.js',
+				//如果是index.js,则esmodule引入没问题，window会变成window[index.js],所以这里要改成ReactDOM
+				name: 'ReactDOM',
 				//umd兼容commonjs和esmodule
 				format: 'umd'
 			},
 			{
 				//react18引入ReactDOM时引入的是ReactDOM包下的client.js
 				file: `${distpath}/client.js`,
-				name: 'client.js',
+				name: 'client',
 				//umd兼容commonjs和esmodule
 				format: 'umd'
 			}
@@ -52,5 +53,20 @@ export default [
 				})
 			})
 		]
+	},
+	//react-test-utils
+	{
+		input: `${pkgpath}/test-utils.ts`,
+		output: [
+			{
+				file: `${distpath}/test-utils.js`,
+				name: 'testUtils',
+				//umd兼容commonjs和esmodule
+				format: 'umd'
+			}
+		],
+		//external表示不打包的依赖,此处就是react-dom的peerDependencies,即react
+		external: ['react', 'react-dom'],
+		plugins: getBaseRollupPlugins()
 	}
 ];
