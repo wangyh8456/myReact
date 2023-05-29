@@ -7,10 +7,12 @@ import { Action } from 'shared/ReactTypes';
 import { createUpdate } from './updateQueue';
 import { enqueueUpdate } from './updateQueue';
 import { scheduleUpdateOnFiber } from './workLoop';
+import { processUpdateQueue } from './updateQueue';
 
 //当前正在渲染的fibernode
 let currentlyRenderingFiber: FiberNode | null = null;
 let workInProgressHook: Hook | null = null;
+let currentHook: Hook | null = null;
 
 const { currentDispatcher } = internals;
 
@@ -30,6 +32,7 @@ export function renderWithHooks(wip: FiberNode) {
 	const current = wip.alternate;
 	if (current !== null) {
 		//update时
+		currentDispatcher.current = HooksDispatcherOnUpdate;
 	} else {
 		//mount时,将当前使用的hooks的集合切换到mount时应该使用的hooks集合,此时内部数据共享层的current也发生了改变
 		//即React包使用的useState等方法都是mount集合的方法
@@ -42,6 +45,8 @@ export function renderWithHooks(wip: FiberNode) {
 
 	//重置操作
 	currentlyRenderingFiber = null;
+	workInProgressHook = null;
+	currentHook = null;
 
 	return children;
 }
@@ -49,6 +54,27 @@ export function renderWithHooks(wip: FiberNode) {
 const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState
 };
+
+const HooksDispatcherOnUpdate: Dispatcher = {
+	useState: updateState
+};
+
+function updateState<State>(): [State, Dispatch<State>] {
+	const hook = updateWorkInProgressHook();
+
+	//计算新的state
+	const queue = hook.updateQueue as UpdateQueue<State>;
+	const pending = queue.shared.pending;
+	if (pending !== null) {
+		const { memoizedState } = processUpdateQueue(
+			hook.memoizedState,
+			pending
+		);
+		hook.memoizedState = memoizedState;
+	}
+
+	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
+}
 
 function mountState<State>(
 	initialState: (() => State) | State
@@ -115,6 +141,58 @@ function mountWorkInProgressHook(): Hook {
 		//mount时，且不是第一个hook
 		workInProgressHook.next = hook;
 		workInProgressHook = hook;
+	}
+	return workInProgressHook;
+}
+
+function updateWorkInProgressHook(): Hook {
+	//TODO render阶段触发的更新
+	let nextCurrentHook: Hook | null;
+
+	if (currentHook === null) {
+		//这是这个FC update时的第一个hook
+		const current = currentlyRenderingFiber?.alternate;
+		if (current !== null) {
+			nextCurrentHook = current?.memoizedState;
+		} else {
+			//mount 但这应该是update调用，因此是错误的边界情况
+			nextCurrentHook = null;
+		}
+	} else {
+		//FC update时的第二个及以后的hook
+		nextCurrentHook = currentHook.next;
+	}
+
+	if (nextCurrentHook === null) {
+		//u1 u2 u3 -> u1 u2 u3 u4,currentHook一直都是上一次mount或update时的u1 u2 u3
+		//当u4时，走else分支，nextCurrentHook=currentHook.next=null
+		//多出一个u4的情况可能出现在if(xxx){useState(0)}这种情况中
+		throw new Error(
+			`组件${currentlyRenderingFiber?.type}本次执行的hook数量超过了上次执行的数量`
+		);
+	}
+
+	currentHook = nextCurrentHook as Hook;
+	const newHook: Hook = {
+		memoizedState: currentHook.memoizedState,
+		updateQueue: currentHook.updateQueue,
+		next: null
+	};
+
+	if (workInProgressHook === null) {
+		//mount时，且为第一个hook
+		if (currentlyRenderingFiber === null) {
+			//在函数组件中执行useState时，currentlyRenderingFiber的值一定是函数组件对应的fibernode
+			//此处fibernode为null，说明不是在函数组件中执行useState
+			throw new Error('请在函数组件内调用hook');
+		} else {
+			workInProgressHook = newHook;
+			currentlyRenderingFiber.memoizedState = workInProgressHook;
+		}
+	} else {
+		//mount时，且不是第一个hook
+		workInProgressHook.next = newHook;
+		workInProgressHook = newHook;
 	}
 	return workInProgressHook;
 }
