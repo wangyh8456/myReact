@@ -1,12 +1,14 @@
-import { Props, ReactElementType } from 'shared/ReactTypes';
+import { Key, Props, ReactElementType } from 'shared/ReactTypes';
 import {
 	FiberNode,
 	createFiberFromElement,
+	createFiberFromFragment,
 	createWorkInProgress
 } from './fiber';
 import { REACT_ELEMENT_TYPE } from 'shared/ReactSymbols';
-import { HostText } from './workTags';
+import { HostText, Fragment } from './workTags';
 import { ChildDeletion, Placement } from './fiberFlags';
+import { REACT_FRAGMENT_TYPE } from 'shared/ReactSymbols';
 
 type ExistingChildren = Map<string | number, FiberNode>;
 
@@ -48,8 +50,13 @@ function childReconciler(shouldTrackEffects: boolean) {
 				//key相同
 				if (element.$$typeof === REACT_ELEMENT_TYPE) {
 					if (currentFiber.type === element.type) {
+						let props = element.props;
+						//1->此处是为了将<></>中的元素取出来使用
+						if (element.type === REACT_FRAGMENT_TYPE) {
+							props = element.props.children;
+						}
 						//type也相同，可复用
-						const existing = useFiber(currentFiber, element.props);
+						const existing = useFiber(currentFiber, props);
 						existing.return = parentFiber;
 						//当前节点可复用，剩余节点删除 A1B2C3->A1
 						deleteRemainingChildren(
@@ -74,7 +81,12 @@ function childReconciler(shouldTrackEffects: boolean) {
 			}
 		}
 		//根据element创建fibernode
-		const fiber = createFiberFromElement(element);
+		let fiber;
+		if (element.type === REACT_FRAGMENT_TYPE) {
+			fiber = createFiberFromFragment(element.props.children, key);
+		} else {
+			fiber = createFiberFromElement(element);
+		}
 		fiber.return = parentFiber;
 		return fiber;
 	}
@@ -207,6 +219,16 @@ function childReconciler(shouldTrackEffects: boolean) {
 		if (typeof element === 'object' && element !== null) {
 			switch (element.$$typeof) {
 				case REACT_ELEMENT_TYPE:
+					if (element.type === REACT_FRAGMENT_TYPE) {
+						//此处是直接构建了Fragment的fibernode,之后在beginwork的Fragment的case中取出children
+						return updateFragment(
+							parentFiber,
+							before,
+							element,
+							keyToUse,
+							existingChildren
+						);
+					}
 					if (before) {
 						if (before.type === element.type) {
 							existingChildren.delete(keyToUse);
@@ -221,16 +243,43 @@ function childReconciler(shouldTrackEffects: boolean) {
 				console.warn('还未实现数组类型child：', element);
 			}
 		}
+		if (Array.isArray(element)) {
+			return updateFragment(
+				parentFiber,
+				before,
+				element,
+				keyToUse,
+				existingChildren
+			);
+		}
 		return null;
 	}
 
 	return function reconcileChildFibers(
 		parentFiber: FiberNode,
 		currentFiber: FiberNode | null,
-		newChild?: ReactElementType
+		newChild: any
 	) {
+		//判断Fragment
+		const isUnkeyedTopLevelFragment =
+			typeof newChild === 'object' &&
+			newChild !== null &&
+			newChild.type === REACT_FRAGMENT_TYPE &&
+			newChild.key === null;
+		if (isUnkeyedTopLevelFragment) {
+			newChild = newChild.props.children;
+		}
 		//单节点
 		if (typeof newChild === 'object' && newChild !== null) {
+			//多节点
+			if (Array.isArray(newChild)) {
+				return reconcileChildrenArray(
+					parentFiber,
+					currentFiber,
+					newChild
+				);
+			}
+
 			switch (newChild.$$typeof) {
 				case REACT_ELEMENT_TYPE:
 					return placeSingleChild(
@@ -241,14 +290,6 @@ function childReconciler(shouldTrackEffects: boolean) {
 						)
 					);
 				default:
-					//TODO多节点
-					if (Array.isArray(newChild)) {
-						return reconcileChildrenArray(
-							parentFiber,
-							currentFiber,
-							newChild
-						);
-					}
 					if (__DEV__) {
 						console.warn('未实现的reconcile类型', newChild);
 					}
@@ -280,6 +321,24 @@ function useFiber(fiber: FiberNode, pendingProps: Props): FiberNode {
 	clone.index = 0;
 	clone.sibling = null;
 	return clone;
+}
+
+function updateFragment(
+	parentFiber: FiberNode,
+	current: FiberNode | undefined,
+	elements: any[],
+	key: Key,
+	existingChildren: ExistingChildren
+) {
+	let fiber;
+	if (!current || current.tag !== Fragment) {
+		fiber = createFiberFromFragment(elements, key);
+	} else {
+		existingChildren.delete(key);
+		fiber = useFiber(current, elements);
+	}
+	fiber.return = parentFiber;
+	return fiber;
 }
 
 //update时
