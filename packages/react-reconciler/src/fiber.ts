@@ -7,6 +7,7 @@ import {
 } from './workTags';
 import { Flags, NoFlags } from './fiberFlags';
 import { Container } from 'hostConfig';
+import { Lane, Lanes, NoLane, NoLanes } from './fiberLanes';
 
 //双缓冲技术：
 //current:与视图中真实ui对应的fibernode树，每个节点称为current
@@ -84,11 +85,15 @@ export class FiberRootNode {
 	current: FiberNode;
 	//指向更新完成后的hostRootFiber
 	finishedWork: FiberNode | null;
+	pendingLanes: Lanes;
+	finishedLane: Lane;
 	constructor(container: Container, hostRootFiber: FiberNode) {
 		this.container = container;
 		this.current = hostRootFiber;
 		hostRootFiber.stateNode = this;
 		this.finishedWork = null;
+		this.pendingLanes = NoLanes;
+		this.finishedLane = NoLane;
 	}
 }
 
