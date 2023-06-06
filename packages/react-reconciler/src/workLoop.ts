@@ -26,7 +26,6 @@ function initWorkLoop(root: FiberRootNode, lane: Lane) {
 
 export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
 	//TODO 调度功能
-
 	//找到FiberRootNode,为了同时满足render时和setState时
 	const root = markUpdateFromFiberToRoot(fiber);
 	markRootUpdated(root, lane);
@@ -80,6 +79,8 @@ function markUpdateFromFiberToRoot(fiber: FiberNode) {
 function performSyncWorkOnRoot(root: FiberRootNode, lane: Lane) {
 	const nextLane = getHighestPriorityLane(root.pendingLanes);
 
+	//比如连续调用三次setState，其实syncQueue中第一个performSyncWorkOnRoot执行时，因为调用了fiberbook中三次dispatch,调用了三次scheduleupdateonfiber,queue中已经有了三个update
+	//但是updateState只需要执行一次，因此其实第一个callback执行时就已经完成了更新，commit之后去掉syncLane标记，避免之后两次重复执行performSyncWorkOnRoot
 	if (nextLane !== SyncLane) {
 		//其他比SyncLane更高的优先级
 		//NoLane

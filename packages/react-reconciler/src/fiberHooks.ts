@@ -65,7 +65,6 @@ const HooksDispatcherOnUpdate: Dispatcher = {
 
 function updateState<State>(): [State, Dispatch<State>] {
 	const hook = updateWorkInProgressHook();
-
 	//计算新的state
 	const queue = hook.updateQueue as UpdateQueue<State>;
 	const pending = queue.shared.pending;
