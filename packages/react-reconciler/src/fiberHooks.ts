@@ -9,6 +9,8 @@ import { enqueueUpdate } from './updateQueue';
 import { scheduleUpdateOnFiber } from './workLoop';
 import { processUpdateQueue } from './updateQueue';
 import { Lane, NoLane, requestUpdateLanes } from './fiberLanes';
+import { Flags, PassiveEffect } from './fiberFlags';
+import { Passive, hookHasEffect } from './hookEffectTags';
 
 //当前正在渲染的fibernode
 let currentlyRenderingFiber: FiberNode | null = null;
@@ -25,11 +27,29 @@ interface Hook {
 	next: Hook | null;
 }
 
+type EffectCallback = () => void;
+type EffectDependencies = any[] | null;
+
+export interface Effect {
+	tag: Flags;
+	create: EffectCallback | void;
+	destroy: EffectCallback | void;
+	deps: EffectDependencies;
+	//Effect存储在hook.memoizedState中,next指向下一个Effect(useEffect、useLayoutEffect、useInsertionEffect等)hook的memoizedState而不是下一个Hook
+	next: Effect | null;
+}
+
+export interface FCUpdateQueue<State> extends UpdateQueue<State> {
+	lastEffect: Effect | null;
+}
+
 export function renderWithHooks(wip: FiberNode, lane: Lane) {
 	//赋值操作
 	currentlyRenderingFiber = wip;
 	//重置
 	wip.memoizedState = null;
+	//重置effect链表
+	wip.updateQueue = null;
 	renderLane = lane;
 
 	const current = wip.alternate;
@@ -56,13 +76,134 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 }
 
 const HooksDispatcherOnMount: Dispatcher = {
-	useState: mountState
+	useState: mountState,
+	useEffect: mountEffect
 };
 
 const HooksDispatcherOnUpdate: Dispatcher = {
-	useState: updateState
+	useState: updateState,
+	useEffect: updateEffect
 };
 
+//void表示null或者undefined
+function pushEffect(
+	hookFlags: Flags,
+	create: EffectCallback | void,
+	destroy: EffectCallback | void,
+	deps: EffectDependencies
+): Effect {
+	const effect: Effect = {
+		tag: hookFlags,
+		create,
+		destroy,
+		deps,
+		next: null
+	};
+	const fiber = currentlyRenderingFiber as FiberNode;
+	const updateQueue = fiber.updateQueue as FCUpdateQueue<any>;
+	if (updateQueue === null) {
+		const updateQueue = createFCUpdateQueue();
+		fiber.updateQueue = updateQueue;
+		effect.next = effect;
+		updateQueue.lastEffect = effect;
+	} else {
+		//插入Effect到环状链表中
+		const lastEffect = updateQueue.lastEffect;
+		if (lastEffect === null) {
+			effect.next = effect;
+			updateQueue.lastEffect = effect;
+		} else {
+			const first = lastEffect.next;
+			effect.next = first;
+			lastEffect.next = effect;
+			updateQueue.lastEffect = effect;
+		}
+	}
+	return effect;
+}
+
+function createFCUpdateQueue<State>() {
+	const updateQueue = createUpdateQueue<State>() as FCUpdateQueue<State>;
+	updateQueue.lastEffect = null;
+	return updateQueue;
+}
+
+function mountEffect(
+	create: EffectCallback | void,
+	deps: EffectDependencies | void
+) {
+	const hook = mountWorkInProgressHook();
+	const nextDeps = deps === undefined ? null : deps;
+	//mountEffect在mount阶段触发，mount时需要处理副作用，执行useEffect的回调函数
+	(currentlyRenderingFiber as FiberNode).flags |= PassiveEffect;
+
+	hook.memoizedState = pushEffect(
+		Passive | hookHasEffect,
+		create,
+		//mount阶段没有销毁函数
+		undefined,
+		nextDeps
+	);
+}
+
+function updateEffect(
+	create: EffectCallback | void,
+	deps: EffectDependencies | void
+) {
+	//按照顺序从hook链表中取出effect的hook
+	const hook = updateWorkInProgressHook();
+	const nextDeps = deps === undefined ? null : deps;
+	let destroy: EffectCallback | void;
+
+	if (currentHook !== null) {
+		//当前effect hook在上次更新时对应的Effect状态
+		const prevEffect = currentHook.memoizedState as Effect;
+		destroy = prevEffect.destroy;
+
+		if (nextDeps !== null) {
+			//浅比较依赖是否发生变化
+			const prevDeps = prevEffect.deps;
+			if (areHookInputsEqual(nextDeps, prevDeps)) {
+				//依赖没有发生变化，不需要更新
+				hook.memoizedState = pushEffect(
+					Passive,
+					create,
+					destroy,
+					nextDeps
+				);
+				return;
+			}
+		}
+		//依赖发生变化,给fiber添加有副作用操作标记，给Effect的tag添加hookHasEffect标记，表示这个副作用需要执行回调
+		(currentlyRenderingFiber as FiberNode).flags |= PassiveEffect;
+		hook.memoizedState = pushEffect(
+			Passive | hookHasEffect,
+			create,
+			destroy,
+			nextDeps
+		);
+	}
+}
+
+function areHookInputsEqual(
+	nextDeps: EffectDependencies,
+	prevDeps: EffectDependencies
+) {
+	if (prevDeps === null || nextDeps === null) {
+		//useEffect(() => {})，没有传入依赖，每次都执行
+		return false;
+	}
+
+	for (let i = 0; i < prevDeps.length && i < nextDeps.length; i++) {
+		if (Object.is(prevDeps[i], nextDeps[i])) {
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+//这里没传入参数，但其实React包调用useState时传入了参数，只是这里没有用到而从hook中取了
 function updateState<State>(): [State, Dispatch<State>] {
 	const hook = updateWorkInProgressHook();
 	//计算新的state
@@ -186,7 +327,7 @@ function updateWorkInProgressHook(): Hook {
 	};
 
 	if (workInProgressHook === null) {
-		//mount时，且为第一个hook
+		//update时，且为第一个hook
 		if (currentlyRenderingFiber === null) {
 			//在函数组件中执行useState时，currentlyRenderingFiber的值一定是函数组件对应的fibernode
 			//此处fibernode为null，说明不是在函数组件中执行useState

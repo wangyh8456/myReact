@@ -8,6 +8,7 @@ import {
 import { Flags, NoFlags } from './fiberFlags';
 import { Container } from 'hostConfig';
 import { Lane, Lanes, NoLane, NoLanes } from './fiberLanes';
+import { Effect } from './fiberHooks';
 
 //双缓冲技术：
 //current:与视图中真实ui对应的fibernode树，每个节点称为current
@@ -77,6 +78,11 @@ export class FiberNode {
 	}
 }
 
+export interface PendingPassiveEffects {
+	unmount: Effect[];
+	update: Effect[];
+}
+
 //ReactDom.createRoot(rootElement).render(<App/>)
 //当前应用统一根节点：FiberRootNode,hostRootFiber:传入的rootElement这个dom对应的Fiber节点，类型为HostRoot,App:<App/>
 //FiberRootNode的current指向hostrootFiber，hostRootFiber的stateNode指向FiberRootNode
@@ -87,6 +93,7 @@ export class FiberRootNode {
 	finishedWork: FiberNode | null;
 	pendingLanes: Lanes;
 	finishedLane: Lane;
+	pendingPassiveEffects: PendingPassiveEffects;
 	constructor(container: Container, hostRootFiber: FiberNode) {
 		this.container = container;
 		this.current = hostRootFiber;
@@ -94,6 +101,10 @@ export class FiberRootNode {
 		this.finishedWork = null;
 		this.pendingLanes = NoLanes;
 		this.finishedLane = NoLane;
+		this.pendingPassiveEffects = {
+			unmount: [],
+			update: []
+		};
 	}
 }
 
