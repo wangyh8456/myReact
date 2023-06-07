@@ -67,10 +67,12 @@ function ensureRootIsScheduled(root: FiberRootNode) {
 		//callback放入syncQueue中
 		scheduleSyncCallback(
 			//这里调用bind是为了让syncQueue中的这个callback在执行时就已经包含了root和updatelane	这两个参数
-			//比如连续执行了三次setSatate，那么有三个performSyncWorkOnRoot被加入syncQueue,flushSyncCallbacks也会执行三次，
-			//但第一次执行flushSyncCallbacks时isFlushingSyncQueue被修改为true，因此这三个flushSyncCallbacks只会执行第一次，
-			//因为flushSyncCallbacks是微任务中调用，因此第一次isFlushingSyncQueue时，queue中就已经添加了三次performSyncWorkOnRoot，即批处理
-			//由于syncQueue中有三个performSyncWorkOnRoot，需要在performSyncWorkOnRoot中对nextLane进行重新判断处理
+			// 比如连续执行了三次setSatate，那么有三个performSyncWorkOnRoot被加入syncQueue,flushSyncCallbacks也会执行三次，
+			// 但第一次执行flushSyncCallbacks时isFlushingSyncQueue被修改为true，不会出现三个flushSyncCallbacks一起执行的现象，
+			// 同时第一次执行好之后，执行另外两个时虽然isFlushingSyncQueue为false，但syncQueue已经在第一次执行后重置为null，因此相当于这三个flushSyncCallbacks只会执行第一次，
+			// 因为flushSyncCallbacks是微任务中调用，因此第一次flushSyncCallbacks时，queue中就已经添加了三次performSyncWorkOnRoot，即批处理
+			// 由于syncQueue中有三个performSyncWorkOnRoot，需要在performSyncWorkOnRoot中对nextLane进行重新判断处理
+			// 第一个performSyncWorkOnRoot执行完后root.pendingLanes的syncLane已经被去掉，因此后面两个performSyncWorkOnRoot不会执行
 			performSyncWorkOnRoot.bind(null, root, updatelane)
 		);
 		//以微任务方式执行flushSyncCallbacks
@@ -211,7 +213,7 @@ function flushPassiveEffects(pendingPassiveEffects: PendingPassiveEffects) {
 		commitHookEffectListCreate(Passive | hookHasEffect, effect);
 	});
 	pendingPassiveEffects.update = [];
-	//因为useEffect过程中也有可能触发新的更新
+	//因为useEffect过程中也有可能触发新的更新,执行完effect之后马上执行flushSyncCallbacks而不是异步执行
 	flushSyncCallbacks();
 }
 
