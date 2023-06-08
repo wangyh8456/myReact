@@ -193,6 +193,7 @@ function commitRoot(root: FiberRootNode) {
 		root.current = finishedWork;
 	}
 	rootDoesHasPassiveEffects = false;
+	//不断循环执行ensureRootIsScheduled，直到没有新的更新
 	ensureRootIsScheduled(root);
 }
 
@@ -213,7 +214,7 @@ function flushPassiveEffects(pendingPassiveEffects: PendingPassiveEffects) {
 		commitHookEffectListCreate(Passive | hookHasEffect, effect);
 	});
 	pendingPassiveEffects.update = [];
-	//因为useEffect过程中也有可能触发新的更新,执行完effect之后马上执行flushSyncCallbacks而不是异步执行
+	//***因为useEffect过程中也有可能触发新的更新，比如useEffect中使用setState,因此执行完effect之后马上执行flushSyncCallbacks，保证更新执行
 	flushSyncCallbacks();
 }
 

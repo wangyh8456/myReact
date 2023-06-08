@@ -338,7 +338,7 @@ function insertOrAppendPlacementNodeIntoContainer(
 	if (finishedWork.tag === HostComponent || finishedWork.tag === HostText) {
 		//stateNode指向宿主环境的dom节点
 		if (before) {
-			insertChildToContainer(hostParent, finishedWork.stateNode, before);
+			insertChildToContainer(finishedWork.stateNode, hostParent, before);
 		} else {
 			appendChildToContainer(hostParent, finishedWork.stateNode);
 		}
