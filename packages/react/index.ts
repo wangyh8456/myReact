@@ -3,7 +3,7 @@ import currentDispatcher from './src/currentDispatcher';
 import { jsx, isValidElement as isValidElementFn } from './src/jsx';
 //React
 
-//useState的返回值是Dispatcher下的useState，即any，一般在接口中会有对于某个方法的定义
+//useState的函数签名是Dispatcher下的useState，即any，一般在接口中会有对于某个方法的定义
 export const useState: Dispatcher['useState'] = (initialState) => {
 	const dispatcher = resolveDispatcher();
 	return dispatcher.useState(initialState);

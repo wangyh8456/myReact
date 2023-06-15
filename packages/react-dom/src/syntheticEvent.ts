@@ -1,4 +1,10 @@
 import { Container } from 'hostConfig';
+import {
+	unstable_ImmediatePriority,
+	unstable_NormalPriority,
+	unstable_UserBlockingPriority,
+	unstable_runWithPriority
+} from 'scheduler';
 import { Props } from 'shared/ReactTypes';
 
 export const elementPropsKey = '__props';
@@ -33,6 +39,7 @@ export function initEvent(container: Container, eventType: string) {
 		console.log('初始化事件：', eventType);
 	}
 	container.addEventListener(eventType, (e) => {
+		//e中的target是触发事件的元素
 		dispatchEvent(container, eventType, e);
 	});
 }
@@ -70,7 +77,11 @@ function dispatchEvent(container: Container, eventType: string, e: Event) {
 function triggerEventFlow(paths: EventCallback[], se: SyntheticEvent) {
 	for (let i = 0; i < paths.length; i++) {
 		const eventCallback = paths[i];
-		eventCallback.call(null, se);
+		//改变unstable_getCurrentPriorityLevel返回的当前currentPriority的值
+		unstable_runWithPriority(eventTypeToSchedulePriority(se.type), () => {
+			eventCallback.call(null, se);
+		});
+
 		if (se.__stopPropagation) {
 			break;
 		}
@@ -122,7 +133,21 @@ function collectPaths(
 				});
 			}
 		}
+		//从target(当前元素)到container(根元素)沿途的事件
 		targetElement = targetElement.parentNode as DOMElement;
 	}
 	return paths;
+}
+
+function eventTypeToSchedulePriority(eventType: string) {
+	switch (eventType) {
+		case 'click':
+		case 'keydown':
+		case 'keyup':
+			return unstable_ImmediatePriority;
+		case 'scroll':
+			return unstable_UserBlockingPriority;
+		default:
+			return unstable_NormalPriority;
+	}
 }

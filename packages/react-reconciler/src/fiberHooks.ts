@@ -1,7 +1,7 @@
 import { Dispatch, Dispatcher } from 'react/src/currentDispatcher';
 import { FiberNode } from './fiber';
 import internals from 'shared/internals';
-import { createUpdateQueue } from './updateQueue';
+import { Update, createUpdateQueue } from './updateQueue';
 import { UpdateQueue } from './updateQueue';
 import { Action } from 'shared/ReactTypes';
 import { createUpdate } from './updateQueue';
@@ -23,7 +23,9 @@ const { currentDispatcher } = internals;
 //要能适用于useState useEffect等各种Hook，需要一个Hook接口
 interface Hook {
 	memoizedState: any;
+	baseState: any;
 	updateQueue: unknown;
+	baseQueue: Update<any> | null;
 	next: Hook | null;
 }
 
@@ -208,15 +210,36 @@ function updateState<State>(): [State, Dispatch<State>] {
 	const hook = updateWorkInProgressHook();
 	//计算新的state
 	const queue = hook.updateQueue as UpdateQueue<State>;
+	const baseState = hook.baseState;
 	const pending = queue.shared.pending;
-	queue.shared.pending = null;
+	const current = currentHook as Hook;
+	//只要不进入commit阶段，current与wip不会互换，因此可以把basequeue保存在current中,之后从current中恢复
+	let baseQueue = current.baseQueue;
+
 	if (pending !== null) {
-		const { memoizedState } = processUpdateQueue(
-			hook.memoizedState,
-			pending,
-			renderLane
-		);
-		hook.memoizedState = memoizedState;
+		if (baseQueue !== null) {
+			//合并baseQueue和pendingUpdateQueue
+			const baseFirst = baseQueue.next;
+			const pendingFirst = pending.next;
+
+			baseQueue.next = pendingFirst;
+			pending.next = baseFirst;
+		}
+		baseQueue = pending;
+		current.baseQueue = pending;
+		//已经保存在current中了
+		queue.shared.pending = null;
+
+		if (baseQueue !== null) {
+			const {
+				memoizedState,
+				baseState: newBaseState,
+				baseQueue: newBaseQueue
+			} = processUpdateQueue(baseState, baseQueue, renderLane);
+			hook.memoizedState = memoizedState;
+			hook.baseState = newBaseState;
+			hook.baseQueue = newBaseQueue;
+		}
 	}
 
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
@@ -271,6 +294,8 @@ function mountWorkInProgressHook(): Hook {
 	const hook: Hook = {
 		memoizedState: null,
 		updateQueue: null,
+		baseState: null,
+		baseQueue: null,
 		next: null
 	};
 
@@ -323,6 +348,8 @@ function updateWorkInProgressHook(): Hook {
 	const newHook: Hook = {
 		memoizedState: currentHook.memoizedState,
 		updateQueue: currentHook.updateQueue,
+		baseQueue: currentHook.baseQueue,
+		baseState: currentHook.baseState,
 		next: null
 	};
 

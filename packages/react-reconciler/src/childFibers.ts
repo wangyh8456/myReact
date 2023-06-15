@@ -115,7 +115,7 @@ function childReconciler(shouldTrackEffects: boolean) {
 	}
 
 	function placeSingleChild(fiber: FiberNode) {
-		//应该追踪副作用且fiber.alternate即current为空时（首屏渲染时）搭上Placement标记
+		//应该追踪副作用且fiber.alternate即current为空时（首屏渲染时）打上Placement标记
 		if (shouldTrackEffects && fiber.alternate === null) {
 			fiber.flags |= Placement;
 		}
@@ -237,12 +237,8 @@ function childReconciler(shouldTrackEffects: boolean) {
 					}
 					return createFiberFromElement(element);
 			}
-			//TODO 数组类型
-			//如<ul><li></li>[<li/>,<li/>]</ul>
-			if (Array.isArray(element) && __DEV__) {
-				console.warn('还未实现数组类型child：', element);
-			}
 		}
+		//如<ul><li></li>[<li/>,<li/>]</ul>中一项是数组时
 		if (Array.isArray(element)) {
 			return updateFragment(
 				parentFiber,
