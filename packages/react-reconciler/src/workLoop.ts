@@ -87,11 +87,17 @@ function ensureRootIsScheduled(root: FiberRootNode) {
 
 	let newCallbackNode = null;
 
+	if (__DEV__) {
+		console.log(
+			`在${
+				updatelane === SyncLane ? '微任务' : '宏任务'
+			}中调度，优先级：`,
+			updatelane
+		);
+	}
+
 	if (updatelane === SyncLane) {
 		//同步优先级，微任务调用
-		if (__DEV__) {
-			console.log('在微任务中调度，优先级：', updatelane);
-		}
 		//callback放入syncQueue中
 		scheduleSyncCallback(
 			//这里调用bind是为了让syncQueue中的这个callback在执行时就已经包含了root和updatelane	这两个参数

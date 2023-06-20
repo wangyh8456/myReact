@@ -4,6 +4,7 @@ export interface Dispatcher {
 	//const [count, setCount] = useState(0);或const [count, setCount] = useState(() => 0);
 	useState: <T>(initialState: (() => T) | T) => [T, Dispatch<T>];
 	useEffect: (callback: () => void | void, deps: any[] | void) => void;
+	useTransition: () => [boolean, (callback: () => void) => void];
 }
 
 export type Dispatch<State> = (action: Action<State>) => void;

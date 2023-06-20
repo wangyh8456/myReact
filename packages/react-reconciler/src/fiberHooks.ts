@@ -1,4 +1,5 @@
 import { Dispatch, Dispatcher } from 'react/src/currentDispatcher';
+import currentBatchConfig from 'react/src/currentBatchConfig';
 import { FiberNode } from './fiber';
 import internals from 'shared/internals';
 import { Update, createUpdateQueue } from './updateQueue';
@@ -79,12 +80,14 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 
 const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState,
-	useEffect: mountEffect
+	useEffect: mountEffect,
+	useTransition: mountTransition
 };
 
 const HooksDispatcherOnUpdate: Dispatcher = {
 	useState: updateState,
-	useEffect: updateEffect
+	useEffect: updateEffect,
+	useTransition: updateTransition
 };
 
 //void表示null或者undefined
@@ -229,17 +232,17 @@ function updateState<State>(): [State, Dispatch<State>] {
 		current.baseQueue = pending;
 		//已经保存在current中了
 		queue.shared.pending = null;
+	}
 
-		if (baseQueue !== null) {
-			const {
-				memoizedState,
-				baseState: newBaseState,
-				baseQueue: newBaseQueue
-			} = processUpdateQueue(baseState, baseQueue, renderLane);
-			hook.memoizedState = memoizedState;
-			hook.baseState = newBaseState;
-			hook.baseQueue = newBaseQueue;
-		}
+	if (baseQueue !== null) {
+		const {
+			memoizedState,
+			baseState: newBaseState,
+			baseQueue: newBaseQueue
+		} = processUpdateQueue(baseState, baseQueue, renderLane);
+		hook.memoizedState = memoizedState;
+		hook.baseState = newBaseState;
+		hook.baseQueue = newBaseQueue;
 	}
 
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
@@ -260,6 +263,7 @@ function mountState<State>(
 	const queue = createUpdateQueue<State>();
 	hook.updateQueue = queue;
 	hook.memoizedState = memoizedState;
+	hook.baseState = memoizedState;
 
 	//可以通过window.dispatch的方法调用setState,虽然没人这么用
 	//通过bind预置了fiber和updateQueue两个参数，暴露出的dispatch方法只需要传入action即可
@@ -273,6 +277,34 @@ function mountState<State>(
 	queue.dispatch = dispatch;
 
 	return [memoizedState, dispatch];
+}
+
+function startTransition(setPending: Dispatch<boolean>, callback: () => void) {
+	setPending(true);
+	const prevTransition = currentBatchConfig.transition;
+	currentBatchConfig.transition = 1;
+
+	callback();
+	setPending(false);
+
+	currentBatchConfig.transition = prevTransition;
+}
+
+function mountTransition(): [boolean, (callback: () => void) => void] {
+	const [isPending, setIsPending] = mountState(false);
+	const hook = mountWorkInProgressHook();
+	const start = startTransition.bind(null, setIsPending);
+	hook.memoizedState = start;
+
+	return [isPending, start];
+}
+
+function updateTransition(): [boolean, (callback: () => void) => void] {
+	const [isPending] = updateState();
+	const hook = updateWorkInProgressHook();
+	const start = hook.memoizedState;
+
+	return [isPending as boolean, start];
 }
 
 function dispatchSetState<State>(
