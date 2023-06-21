@@ -81,13 +81,15 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState,
 	useEffect: mountEffect,
-	useTransition: mountTransition
+	useTransition: mountTransition,
+	useRef: mountRef
 };
 
 const HooksDispatcherOnUpdate: Dispatcher = {
 	useState: updateState,
 	useEffect: updateEffect,
-	useTransition: updateTransition
+	useTransition: updateTransition,
+	useRef: updateRef
 };
 
 //void表示null或者undefined
@@ -279,6 +281,17 @@ function mountState<State>(
 	return [memoizedState, dispatch];
 }
 
+function dispatchSetState<State>(
+	fiber: FiberNode,
+	updateQueue: UpdateQueue<State>,
+	action: Action<State>
+) {
+	const lane = requestUpdateLanes();
+	const update = createUpdate(action, lane);
+	enqueueUpdate(updateQueue, update);
+	scheduleUpdateOnFiber(fiber, lane);
+}
+
 function startTransition(setPending: Dispatch<boolean>, callback: () => void) {
 	setPending(true);
 	const prevTransition = currentBatchConfig.transition;
@@ -307,15 +320,16 @@ function updateTransition(): [boolean, (callback: () => void) => void] {
 	return [isPending as boolean, start];
 }
 
-function dispatchSetState<State>(
-	fiber: FiberNode,
-	updateQueue: UpdateQueue<State>,
-	action: Action<State>
-) {
-	const lane = requestUpdateLanes();
-	const update = createUpdate(action, lane);
-	enqueueUpdate(updateQueue, update);
-	scheduleUpdateOnFiber(fiber, lane);
+function mountRef<T>(initialValue: T): { current: T } {
+	const hook = mountWorkInProgressHook();
+	const ref = { current: initialValue };
+	hook.memoizedState = ref;
+	return ref;
+}
+
+function updateRef<T>(initialValue: T): { current: T } {
+	const hook = updateWorkInProgressHook();
+	return hook.memoizedState;
 }
 
 //比如在使用const [count, setCount] = useState(0)时，

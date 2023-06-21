@@ -12,7 +12,8 @@ import {
 	commitMutationEffects,
 	commitHookEffectListUnmount,
 	commitHookEffectListDestroy,
-	commitHookEffectListCreate
+	commitHookEffectListCreate,
+	commitLayoutEffects
 } from './commitWork';
 import {
 	Lane,
@@ -301,6 +302,7 @@ function commitRoot(root: FiberRootNode) {
 		root.current = finishedWork;
 
 		//layout阶段
+		commitLayoutEffects(finishedWork, root);
 	} else {
 		root.current = finishedWork;
 	}
